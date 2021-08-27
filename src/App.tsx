@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import './App.css';
 // luxon makes it easy for us to format dates into "in X minutes" format
-import {DateTime} from 'luxon';
+import {DateTime, ToRelativeOptions} from 'luxon';
 // we import the typescript types from another file - types help make sure our data looks right at every step
 import { Istation, Ideparture } from './types';
+import Marquee from "react-fast-marquee";
+import useInterval from './useInterval.js';
 
 export default function App() {
   // the station the user has selected ( and automatically set to the nearest found station)
@@ -12,6 +14,7 @@ export default function App() {
   const [stations, setStations] = useState<Istation[]>([]);
   // the list of departures from the selected station
   const [departures, setDepartures] = useState<Ideparture[]>([]);
+  const [cycleRow, setCycleRow] = useState<number>(0);
 
   useEffect(()=> {
     // async wrapper (as async/await isnt allowed directly in useEffect as the callback)
@@ -21,7 +24,7 @@ export default function App() {
         const position = await getPosition();
         const { latitude, longitude } = position.coords;
         // we're sending the client location to the server, so we can get the nearest station
-        await fetch(`https://v5.vbb.transport.rest/stops/nearby?latitude=${latitude}&longitude=${longitude}`)
+        await fetch(`https://v5.vbb.transport.rest/stops/nearby?latitude=${52.4365961}&longitude=${13.5884297}`)
         .then((response) => response.json())
         .then((stations) => {
           // set the nearest station by default as the selected station
@@ -47,7 +50,8 @@ export default function App() {
         await fetch(`https://v5.vbb.transport.rest/stops/${selectedStation.id}/departures`)
         .then((response) => response.json())
         .then((departures) => { 
-          setDepartures(cleanUpDepartures(departures))
+          console.log(departures)
+          setDepartures(departures)
         })
         .catch((error) => {
           console.log(JSON.stringify(error));
@@ -57,7 +61,7 @@ export default function App() {
       }
     }
     // we check for changes in the departure schedule every 15 seconds
-    const poll = setInterval(_fetch, 15000);
+    const poll = setInterval(_fetch, 25000);
 
     // we also fetch data when selectedStation changes
     _fetch()
@@ -75,6 +79,25 @@ export default function App() {
     }
   };
 
+  // this custom interval function is used to change which row of text is scrolling.
+  // the rate at which the interval changes is determined by the total length of text in the warning-type remarks in each departure
+  // a dynamic interval time is not possible with a normal setInterval function
+  useInterval(() => {
+    console.log(cycleRow, departures.length,  departures[cycleRow] ? departures[cycleRow].remarks.length * 15000 : null)
+    setCycleRow((p)=> {
+      let res = (p + 1) % departures.length
+      // if the next departure doesn't have any warning-type remarks, we move to the next departure
+      if(departures[res].remarks.filter((r) => r.type === 'warning').length > 0) {
+        return res
+      } else {
+        return (p + 2) % departures.length
+      }
+    });
+  }, departures[cycleRow] ? (departures[cycleRow].remarks
+    .filter((r) => r.type === 'warning')
+    .map(r => r.summary).join("")
+    .length * 500) + 10000: null);
+
   return (
     <>
       {stations.length>0 ? (
@@ -90,18 +113,40 @@ export default function App() {
           <table>
             <tbody> 
             {/* we loop over all departures and display them as a list */}
-            {departures.map((d:Ideparture) => (
-                <tr key={d.id}> 
-                  <td>{d.line.name}</td> 
-                  <td>{d.direction}</td> 
-                  {/* we use luxon's toRelative method to format the departure time relative to now */}
-                  <td className="time">{DateTime.fromISO(d.when).toRelative()}</td> 
-                </tr> 
-              ))}
+            {departures
+            .filter ( departure => new Date(departure.when).getTime() > Date.now())
+            .map((d:Ideparture, i) => {
+              // we format the departure time into a nicer format
+              let time = DateTime.fromISO(d.when.toString()).toRelative()
+              if(time) {
+                time = time.replace("in ", "").replace("utes","").replace("ute","")
+                if(time.includes("seconds")) time = "<1 min"
+              }
+                return (
+                  <tr key={d.tripId}> 
+                    <td style={{"width": "10%"}}>{d.line.name}</td>
+                    <td style={{width: "70%"}}>
+                      { cycleRow === i ? (
+                        <Marquee delay={10} gradient={false} speed={100}>
+                          <span>{d.direction} </span>{" "}
+                          {d.remarks
+                          .filter((r) => r.type === 'warning')
+                          .map((r) => (
+                            <span key={r.id} className="remark"> {" "}{r.summary}</span>
+                          ))}
+                        </Marquee>
+                      ) : (
+                        <span>{d.direction}</span>
+                      )}
+                    </td> 
+                    <td style={{"width": "20%"}} className="time">{time}</td> 
+                  </tr>
+              ) 
+                })} 
             </tbody> 
           </table> 
         </div>
-      : null}
+      : "loading (or you're not in Berlin)"}
     </>
   );
 }
@@ -111,31 +156,4 @@ function getPosition(): Promise<any> {
   return new Promise((resolve, reject) => 
       navigator.geolocation.getCurrentPosition(resolve, reject, {maximumAge:10000, timeout:15000, enableHighAccuracy: true})
   );
-}
-
-// this function cleans up the departures data to make it easier to work with and display
-function cleanUpDepartures(departures: any) {
-  return departures.map((d:any) => ({
-    tripId: d.tripId,
-    id: Math.random()*1000000,
-    stop: {
-      products: {
-        suburban: d.stop.products.suburban,
-        subway: d.stop.products.subway,
-        tram: d.stop.products.tram,
-        bus: d.stop.products.bus,
-        ferry: d.stop.products.ferry,
-        express: d.stop.products.express,
-        regional: d.stop.products.regional
-      }
-    },
-    when: d.when,
-    plannedWhen: d.plannedWhen,
-    delay: d.delay,
-    platform: d.platform,
-    direction: d.direction,
-    line: {
-      name: d.line.name
-    }
-  } as Ideparture))
 }
