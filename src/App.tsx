@@ -96,7 +96,7 @@ export default function App() {
   }, departures[cycleRow] ? (departures[cycleRow].remarks
     .filter((r) => r.type === 'warning')
     .map(r => r.summary).join("")
-    .length * 500) + 10000: null);
+    .length * 485) + 10000: null);
 
   return (
     <>
