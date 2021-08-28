@@ -131,8 +131,8 @@ export default function App() {
                           <span>{d.direction} </span>{" "}
                           {d.remarks
                           .filter((r) => r.type === 'warning')
-                          .map((r) => (
-                            <span key={r.id} className="remark"> {" "}{r.summary}</span>
+                          .map((r, i, arr) => (
+                            <span key={r.id} className={`remark${i===arr.length-1? " remark-last":""}`}> {" "}{r.summary}</span>
                           ))}
                         </Marquee>
                       ) : (

@@ -106,6 +106,8 @@ table {
 }
 
 .remark {
-  /* color: orange; */
   padding-left: 1em;
+}
+.remark-last {
+  padding-right: 8em;
 }
