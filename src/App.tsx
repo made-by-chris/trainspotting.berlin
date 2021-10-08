@@ -24,7 +24,7 @@ export default function App() {
         const position = await getPosition();
         const { latitude, longitude } = position.coords;
         // we're sending the client location to the server, so we can get the nearest station
-        await fetch(`https://v5.vbb.transport.rest/stops/nearby?latitude=${52.4365961}&longitude=${13.5884297}`)
+        await fetch(`https://v5.vbb.transport.rest/stops/nearby?latitude=${latitude}&longitude=${longitude}`)
         .then((response) => response.json())
         .then((stations) => {
           // set the nearest station by default as the selected station
